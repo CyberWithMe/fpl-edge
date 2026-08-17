@@ -171,9 +171,10 @@ footer{text-align:center;font-size:11px;color:var(--chalk-dim);padding:20px;font
 // ============================================================================
 const FPL_BASE = 'https://fantasy.premierleague.com/api';
 const PROXIES = [
-  url => url, // try direct first
+  url => 'https://corsproxy.io/?url=' + encodeURIComponent(url), // free for github.io origins
+  url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
   url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
-  url => 'https://corsproxy.io/?url=' + encodeURIComponent(url),
+  url => url, // last-ditch direct attempt
 ];
 const POS_MAP = {1:'GK',2:'DEF',3:'MID',4:'FWD'};
 const POS_ORDER = ['GK','DEF','MID','FWD'];
@@ -277,17 +278,19 @@ function fx(v){ return (v>=1?'+':'') + Math.round((v-1)*100) + '%'; }
 // FETCH LAYER (with CORS-proxy fallback)
 // ============================================================================
 async function fetchJSON(url){
-  let lastErr;
+  const attempts = [];
   for (const wrap of PROXIES){
+    const proxied = wrap(url);
     try{
-      const resp = await fetch(wrap(url), {headers:{'Accept':'application/json'}});
-      if (!resp.ok) throw new Error('HTTP '+resp.status);
+      const resp = await fetch(proxied, {headers:{'Accept':'application/json'}});
+      if (!resp.ok) { attempts.push(hostOf(proxied)+': HTTP '+resp.status); continue; }
       const text = await resp.text();
       return JSON.parse(text);
-    }catch(e){ lastErr = e; }
+    }catch(e){ attempts.push(hostOf(proxied)+': '+e.message); }
   }
-  throw new Error('Could not reach FPL API (all routes failed): ' + lastErr);
+  throw new Error('All routes failed — ' + attempts.join(' | '));
 }
+function hostOf(u){ try{ return new URL(u).hostname; }catch(e){ return u.slice(0,30); } }
 
 function setStatus(msg, isErr){
   const el = document.getElementById('status');
