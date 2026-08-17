@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>FPL Edge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --turf-dark:#0a2417;
+  --turf:#123a26;
+  --turf-line:#2a5940;
+  --chalk:#f4f1e6;
+  --chalk-dim:#a9b8ad;
+  --gold:#c9a24b;
+  --gold-bright:#e0bc6a;
+  --red:#c0453a;
+  --ink:#071510;
+  --panel:#0e2e1e;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--ink);color:var(--chalk);font-family:'Inter',sans-serif;}
+body{
+  background:
+    radial-gradient(ellipse at top, var(--turf) 0%, var(--ink) 75%);
+  min-height:100vh;
+  padding-bottom:60px;
+}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px;}
+
+/* ---- Header ---- */
+header{padding:28px 16px 18px;text-align:center;position:relative;}
+.eyebrow{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:6px;}
+h1{font-family:'Oswald',sans-serif;font-weight:700;font-size:40px;letter-spacing:.02em;margin:0;text-transform:uppercase;color:var(--chalk);line-height:1;}
+h1 span{color:var(--gold-bright);}
+.subhead{color:var(--chalk-dim);font-size:13px;margin-top:8px;}
+.pitchlines{position:absolute;inset:0;pointer-events:none;opacity:.15;background-image:
+  linear-gradient(var(--turf-line) 1px, transparent 1px);
+  background-size:100% 12px;
+}
+
+/* ---- Card ---- */
+.card{background:var(--panel);border:1px solid var(--turf-line);border-radius:14px;padding:18px;margin-bottom:16px;}
+label{display:block;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk-dim);margin-bottom:6px;}
+input[type=text],input[type=number],select{
+  width:100%;background:var(--ink);border:1px solid var(--turf-line);color:var(--chalk);
+  padding:12px 14px;border-radius:8px;font-size:16px;font-family:'Inter',sans-serif;margin-bottom:14px;
+}
+input:focus,select:focus{outline:none;border-color:var(--gold);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+button.primary{
+  width:100%;background:var(--gold);color:var(--ink);border:none;border-radius:8px;
+  padding:14px;font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;letter-spacing:.05em;
+  text-transform:uppercase;cursor:pointer;transition:background .15s;
+}
+button.primary:active{background:var(--gold-bright);}
+button.primary:disabled{background:#5a5548;cursor:default;}
+.hint{font-size:12px;color:var(--chalk-dim);margin-top:-6px;margin-bottom:14px;line-height:1.5;}
+
+/* ---- Status ---- */
+#status{font-family:'Space Mono',monospace;font-size:12px;color:var(--gold);text-align:center;padding:10px;min-height:20px;}
+.error{color:var(--red)!important;}
+
+/* ---- Tabs ---- */
+.tabs{display:flex;gap:6px;margin-bottom:14px;}
+.tab{flex:1;text-align:center;padding:10px 4px;border-radius:8px;font-family:'Oswald',sans-serif;font-size:13px;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--chalk-dim);background:var(--panel);
+  border:1px solid var(--turf-line);cursor:pointer;}
+.tab.active{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:600;}
+.tabpanel{display:none;}
+.tabpanel.active{display:block;}
+
+/* ---- Pitch ---- */
+.pitch-wrap{background:linear-gradient(180deg, var(--turf) 0%, var(--turf-dark) 100%);border-radius:12px;
+  border:1px solid var(--turf-line);padding:10px 0;margin-bottom:14px;overflow:hidden;}
+.formation-label{text-align:center;font-family:'Space Mono',monospace;font-size:11px;color:var(--gold);letter-spacing:.15em;margin-bottom:2px;}
+
+/* ---- Player rows ---- */
+.plist{list-style:none;margin:0;padding:0;}
+.prow{display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--turf-line);}
+.prow:last-child{border-bottom:none;}
+.pnum{font-family:'Space Mono',monospace;font-size:11px;color:var(--chalk-dim);width:18px;text-align:center;flex-shrink:0;}
+.pinfo{flex:1;min-width:0;}
+.pname{font-family:'Oswald',sans-serif;font-size:15px;font-weight:500;color:var(--chalk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pmeta{font-size:11px;color:var(--chalk-dim);margin-top:1px;}
+.pos-tag{display:inline-block;font-family:'Space Mono',monospace;font-size:9px;padding:1px 5px;border-radius:3px;background:var(--turf-line);color:var(--chalk-dim);margin-right:5px;}
+.pxp{font-family:'Space Mono',monospace;font-weight:700;font-size:15px;color:var(--gold-bright);text-align:right;flex-shrink:0;min-width:44px;}
+.pprice{font-family:'Space Mono',monospace;font-size:11px;color:var(--chalk-dim);text-align:right;flex-shrink:0;min-width:38px;}
+.cap-badge{background:var(--gold);color:var(--ink);font-family:'Space Mono',monospace;font-weight:700;font-size:9px;
+  width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-left:4px;}
+
+/* ---- Section headers ---- */
+.sec-title{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.06em;font-size:14px;
+  color:var(--gold);margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--turf-line);}
+.sec-title:first-child{margin-top:0;}
+.summary-strip{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:12px;
+  color:var(--chalk-dim);padding:8px 4px 4px;}
+.summary-strip b{color:var(--chalk);}
+
+/* ---- Transfer suggestion ---- */
+.xferrow{background:var(--ink);border:1px solid var(--turf-line);border-radius:10px;padding:12px;margin-bottom:10px;}
+.xfer-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.xfer-out{color:var(--chalk-dim);text-decoration:line-through;font-size:13px;}
+.xfer-in{color:var(--chalk);font-weight:600;font-size:14px;font-family:'Oswald',sans-serif;}
+.xfer-gain{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;}
+.gain-pos{color:#6fbf73;}
+.gain-neg{color:var(--red);}
+.xfer-sub{font-size:11px;color:var(--chalk-dim);}
+
+.empty{text-align:center;color:var(--chalk-dim);font-size:13px;padding:30px 10px;line-height:1.6;}
+footer{text-align:center;font-size:11px;color:var(--chalk-dim);padding:20px;font-family:'Space Mono',monospace;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Team Sheet &middot; xP Model</div>
+    <h1>FPL <span>Edge</span></h1>
+    <div class="subhead">Live official data &middot; heuristic expected-points model &middot; squad optimizer</div>
+  </header>
+
+  <div class="card">
+    <label for="teamId">Your FPL Team ID (optional, for transfer advice)</label>
+    <input type="text" id="teamId" inputmode="numeric" placeholder="e.g. 1234567">
+    <div class="hint">Find it in the URL when you view "Points" on the FPL site: fantasy.premierleague.com/entry/<b>1234567</b>/event/1</div>
+    <div class="row2">
+      <div>
+        <label for="horizon">Horizon</label>
+        <select id="horizon">
+          <option value="1">Next GW</option>
+          <option value="3">Next 3 GWs</option>
+          <option value="5" selected>Next 5 GWs</option>
+          <option value="8">Next 8 GWs</option>
+        </select>
+      </div>
+      <div>
+        <label for="budget">Budget (&pound;m)</label>
+        <input type="number" id="budget" value="100.0" step="0.1">
+      </div>
+    </div>
+    <label for="leagueId">Mini-League ID (optional, for rival-aware strategy)</label>
+    <input type="text" id="leagueId" inputmode="numeric" placeholder="e.g. 314">
+    <div class="hint">Find it in the URL of your mini-league page: fantasy.premierleague.com/leagues/<b>314</b>/standings/c</div>
+    <button class="primary" id="runBtn" onclick="runAnalysis()">Analyze</button>
+    <div id="status"></div>
+    <div id="calibNote" class="hint" style="margin-top:10px;"></div>
+  </div>
+
+  <div id="results" style="display:none;">
+    <div class="tabs">
+      <div class="tab active" data-tab="dream" onclick="switchTab('dream')">Dream XI</div>
+      <div class="tab" data-tab="squad" onclick="switchTab('squad')">Your Squad</div>
+      <div class="tab" data-tab="xfers" onclick="switchTab('xfers')">Transfers</div>
+      <div class="tab" data-tab="league" onclick="switchTab('league')">League</div>
+    </div>
+
+    <div class="tabpanel active" id="tab-dream"></div>
+    <div class="tabpanel" id="tab-squad"></div>
+    <div class="tabpanel" id="tab-xfers"></div>
+    <div class="tabpanel" id="tab-league"></div>
+  </div>
+
+  <footer>Data: official FPL API &middot; Model is a heuristic estimate, not a guarantee.</footer>
+</div>
+
+<script>
+// ============================================================================
+// CONFIG
+// ============================================================================
+const FPL_BASE = 'https://fantasy.premierleague.com/api';
+const PROXIES = [
+  url => url, // try direct first
+  url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+  url => 'https://corsproxy.io/?url=' + encodeURIComponent(url),
+];
+const POS_MAP = {1:'GK',2:'DEF',3:'MID',4:'FWD'};
+const POS_ORDER = ['GK','DEF','MID','FWD'];
+
+let STATE = { bootstrap:null, fixtures:null, players:null, teams:null, currentEvent:null,
+              horizon:5, budget:100.0, dreamSquad:null, dreamXI:null, userSquad:null, userInfo:null,
+              calibration:{GK:1,DEF:1,MID:1,FWD:1,gwsLearned:0}, league:null };
+
+const CALIB_KEY = 'fpl_calibration_v1';
+const PENDING_KEY = 'fpl_pending_predictions_v1';
+
+// ============================================================================
+// SELF-CALIBRATION: learn from each finished gameweek
+// ============================================================================
+async function loadCalibration(){
+  if (!window.storage) return;
+  try{
+    const r = await window.storage.get(CALIB_KEY);
+    if (r && r.value) STATE.calibration = JSON.parse(r.value);
+  }catch(e){ /* no calibration yet */ }
+}
+
+async function reconcilePredictions(){
+  if (!window.storage) return;
+  let pending = [];
+  try{
+    const r = await window.storage.get(PENDING_KEY);
+    if (r && r.value) pending = JSON.parse(r.value);
+  }catch(e){ pending = []; }
+  if (!pending.length) return;
+
+  const finishedEventIds = new Set(STATE.bootstrap.events.filter(e=>e.finished).map(e=>e.id));
+  const dueGws = [...new Set(pending.filter(p=>finishedEventIds.has(p.gw)).map(p=>p.gw))];
+  if (!dueGws.length) return;
+
+  const errorsByPos = {GK:[],DEF:[],MID:[],FWD:[]};
+  for (const gw of dueGws){
+    let live;
+    try{ live = await fetchJSON(FPL_BASE + '/event/' + gw + '/live/'); }catch(e){ continue; }
+    const actualById = {};
+    live.elements.forEach(el=> actualById[el.id] = el.stats);
+    pending.filter(p=>p.gw===gw).forEach(pred=>{
+      const stats = actualById[pred.playerId];
+      if (!stats || stats.minutes < 1) return; // skip players who didn't play - not a model error
+      errorsByPos[pred.pos].push({predicted: pred.predictedXP, actual: stats.total_points});
+    });
+  }
+
+  const alpha = 0.3;
+  POS_ORDER.forEach(pos=>{
+    const samples = errorsByPos[pos];
+    if (samples.length < 3) return; // not enough signal
+    const sumPred = samples.reduce((s,x)=>s+Math.max(0.3,x.predicted),0);
+    const sumActual = samples.reduce((s,x)=>s+x.actual,0);
+    const ratio = sumPred>0 ? sumActual/sumPred : 1;
+    const clampedRatio = clamp(ratio, 0.6, 1.6);
+    const cur = STATE.calibration[pos] || 1;
+    STATE.calibration[pos] = clamp(cur*(1-alpha) + clampedRatio*alpha, 0.7, 1.3);
+  });
+  STATE.calibration.gwsLearned = (STATE.calibration.gwsLearned||0) + dueGws.length;
+
+  const remaining = pending.filter(p=> !finishedEventIds.has(p.gw));
+  try{
+    await window.storage.set(CALIB_KEY, JSON.stringify(STATE.calibration));
+    await window.storage.set(PENDING_KEY, JSON.stringify(remaining));
+  }catch(e){}
+}
+
+async function savePredictionsForLearning(players){
+  if (!window.storage) return;
+  let pending = [];
+  try{
+    const r = await window.storage.get(PENDING_KEY);
+    if (r && r.value) pending = JSON.parse(r.value);
+  }catch(e){ pending = []; }
+  // only log the immediate next GW's predicted points (isolates model accuracy per-gameweek)
+  const already = new Set(pending.filter(p=>p.gw===STATE.currentEvent).map(p=>p.playerId));
+  players.forEach(p=>{
+    if (already.has(p.id) || p.numFixtures===0) return;
+    const gw1xp = p.gw1xp!==undefined ? p.gw1xp : p.xpPerGW;
+    pending.push({gw: STATE.currentEvent, playerId: p.id, pos: p.pos, predictedXP: gw1xp});
+  });
+  // keep log bounded - drop anything older than 8 gameweeks back
+  pending = pending.filter(p => p.gw >= STATE.currentEvent - 8);
+  try{ await window.storage.set(PENDING_KEY, JSON.stringify(pending)); }catch(e){}
+}
+
+function renderCalibNote(){
+  const c = STATE.calibration;
+  const n = c.gwsLearned||0;
+  if (n === 0){
+    document.getElementById('calibNote').textContent = 'Model calibration: no completed gameweeks learned yet — accuracy will sharpen as results come in.';
+  } else {
+    document.getElementById('calibNote').textContent =
+      `Model calibration (from ${n} tracked GW${n>1?'s':''}): GK ${fx(c.GK)} · DEF ${fx(c.DEF)} · MID ${fx(c.MID)} · FWD ${fx(c.FWD)}`;
+  }
+}
+function fx(v){ return (v>=1?'+':'') + Math.round((v-1)*100) + '%'; }
+
+// ============================================================================
+// FETCH LAYER (with CORS-proxy fallback)
+// ============================================================================
+async function fetchJSON(url){
+  let lastErr;
+  for (const wrap of PROXIES){
+    try{
+      const resp = await fetch(wrap(url), {headers:{'Accept':'application/json'}});
+      if (!resp.ok) throw new Error('HTTP '+resp.status);
+      const text = await resp.text();
+      return JSON.parse(text);
+    }catch(e){ lastErr = e; }
+  }
+  throw new Error('Could not reach FPL API (all routes failed): ' + lastErr);
+}
+
+function setStatus(msg, isErr){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = isErr ? 'error' : '';
+}
+
+// ============================================================================
+// MAIN ENTRY
+// ============================================================================
+async function runAnalysis(){
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  document.getElementById('results').style.display = 'none';
+  try{
+    STATE.horizon = parseInt(document.getElementById('horizon').value);
+    STATE.budget = parseFloat(document.getElementById('budget').value) || 100.0;
+    const teamIdRaw = document.getElementById('teamId').value.trim();
+
+    setStatus('Fetching player data…');
+    STATE.bootstrap = await fetchJSON(FPL_BASE + '/bootstrap-static/');
+    STATE.teams = {}; STATE.bootstrap.teams.forEach(t => STATE.teams[t.id] = t);
+    const events = STATE.bootstrap.events;
+    STATE.currentEvent = (events.find(e=>e.is_current) || events.find(e=>e.is_next) || events[0]).id;
+
+    setStatus('Fetching fixtures…');
+    STATE.fixtures = await fetchJSON(FPL_BASE + '/fixtures/?future=1');
+
+    setStatus('Learning from finished gameweeks…');
+    await loadCalibration();
+    await reconcilePredictions();
+    renderCalibNote();
+
+    setStatus('Computing expected points…');
+    STATE.players = computeXP(STATE.bootstrap.elements, STATE.teams, STATE.fixtures, STATE.currentEvent, STATE.horizon, STATE.calibration);
+    savePredictionsForLearning(STATE.players); // fire and forget, logs this GW's forecast for future reconciliation
+
+    setStatus('Optimizing squad…');
+    const opt = optimizeSquad(STATE.players, STATE.budget);
+    STATE.dreamSquad = opt.squad;
+    STATE.dreamXI = pickBestXI(opt.squad);
+
+    renderDreamXI();
+
+    if (teamIdRaw && /^\d+$/.test(teamIdRaw)){
+      setStatus('Fetching your squad…');
+      try{
+        const picksData = await fetchJSON(FPL_BASE + '/entry/' + teamIdRaw + '/event/' + STATE.currentEvent + '/picks/');
+        const entryData = await fetchJSON(FPL_BASE + '/entry/' + teamIdRaw + '/');
+        STATE.userInfo = {picks:picksData, entry:entryData};
+        if (window.storage) { try{ await window.storage.set('fpl_team_id', teamIdRaw); }catch(e){} }
+        renderUserSquad();
+        renderTransfers();
+      }catch(e){
+        document.getElementById('tab-squad').innerHTML = '<div class="empty">Could not load team ID '+teamIdRaw+'. Double check it, or it may be a private/invalid ID.<br><br>'+e.message+'</div>';
+        document.getElementById('tab-xfers').innerHTML = '<div class="empty">Load your squad first (see Your Squad tab).</div>';
+      }
+    } else {
+      document.getElementById('tab-squad').innerHTML = '<div class="empty">Enter your FPL Team ID above and re-run to see your current squad analyzed.</div>';
+      document.getElementById('tab-xfers').innerHTML = '<div class="empty">Enter your FPL Team ID above and re-run to get transfer suggestions.</div>';
+    }
+
+    const leagueIdRaw = document.getElementById('leagueId').value.trim();
+    if (leagueIdRaw && /^\d+$/.test(leagueIdRaw)){
+      setStatus('Scouting your mini-league…');
+      try{
+        await loadLeagueData(leagueIdRaw, teamIdRaw);
+        if (window.storage) { try{ await window.storage.set('fpl_league_id', leagueIdRaw); }catch(e){} }
+        renderLeague();
+      }catch(e){
+        document.getElementById('tab-league').innerHTML = '<div class="empty">Could not load league '+leagueIdRaw+'.<br><br>'+e.message+'</div>';
+      }
+    } else {
+      document.getElementById('tab-league').innerHTML = '<div class="empty">Enter your Mini-League ID above and re-run to see rival-aware strategy: effective ownership in your league, and differential picks to help you climb.</div>';
+    }
+
+    document.getElementById('results').style.display = 'block';
+    setStatus('Done. GW' + STATE.currentEvent + ' onward, ' + STATE.horizon + '-GW horizon.');
+  }catch(e){
+    setStatus('Error: ' + e.message, true);
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+// ============================================================================
+// EXPECTED POINTS MODEL
+// ============================================================================
+function computeXP(elements, teams, fixtures, fromEvent, horizon, calibration){
+  calibration = calibration || {GK:1,DEF:1,MID:1,FWD:1};
+  // League-average attack/defence strength for normalization
+  const teamList = Object.values(teams);
+  const avgAtkHome = avg(teamList.map(t=>t.strength_attack_home));
+  const avgAtkAway = avg(teamList.map(t=>t.strength_attack_away));
+  const avgDefHome = avg(teamList.map(t=>t.strength_defence_home));
+  const avgDefAway = avg(teamList.map(t=>t.strength_defence_away));
+  const LEAGUE_AVG_GOALS = 1.45; // approx goals/team/game baseline
+
+  const toEvent = fromEvent + horizon - 1;
+  const relevantFixtures = fixtures.filter(f => f.event && f.event >= fromEvent && f.event <= toEvent);
+
+  // group fixtures per team -> list of {opponent, isHome, event}
+  const teamFixtures = {};
+  relevantFixtures.forEach(f=>{
+    if (!teamFixtures[f.team_h]) teamFixtures[f.team_h] = [];
+    if (!teamFixtures[f.team_a]) teamFixtures[f.team_a] = [];
+    teamFixtures[f.team_h].push({opp:f.team_a, isHome:true, event:f.event});
+    teamFixtures[f.team_a].push({opp:f.team_h, isHome:false, event:f.event});
+  });
+
+  const finishedEvents = STATE.bootstrap.events.filter(e=>e.finished).length || 1;
+
+  const players = elements.map(el=>{
+    const pos = POS_MAP[el.element_type];
+    const team = teams[el.team];
+    const myFixtures = teamFixtures[el.team] || [];
+
+    // --- playing-time probability ---
+    let pAppear;
+    if (el.chance_of_playing_next_round !== null && el.chance_of_playing_next_round !== undefined){
+      pAppear = el.chance_of_playing_next_round / 100;
+    } else if (el.status !== 'a'){
+      pAppear = el.status === 'd' ? 0.5 : 0.05; // doubtful vs unavailable
+    } else {
+      const starts = el.starts || 0;
+      pAppear = clamp((starts / finishedEvents) * 1.15, 0.05, 0.98);
+      if (finishedEvents < 2) pAppear = clamp(el.minutes>0?0.7:0.3,0.05,0.98);
+    }
+    const p60 = pAppear * 0.82;
+
+    // --- underlying rates (season aggregate, per 90) ---
+    const xgi90 = parseFloat(el.expected_goal_involvements_per_90 || 0) || estimateXGI90(el);
+    const xg90 = parseFloat(el.expected_goals_per_90 || 0);
+    const xa90 = parseFloat(el.expected_assists_per_90 || xgi90 - xg90 || 0);
+    const bonusPerGame = finishedEvents>0 ? (el.bonus||0)/finishedEvents : 0;
+    const savesPerGame = finishedEvents>0 ? (el.saves||0)/finishedEvents : 0;
+
+    let totalXP = 0;
+    const perGW = {};
+
+    if (myFixtures.length === 0){
+      // blank gameweek(s) in this horizon window for this team
+      players_none: {}
+    }
+
+    myFixtures.forEach(fx=>{
+      const oppTeam = teams[fx.opp];
+      const atkStrength = fx.isHome ? team.strength_attack_home : team.strength_attack_away;
+      const defStrength = fx.isHome ? team.strength_defence_home : team.strength_defence_away;
+      const oppAtk = fx.isHome ? oppTeam.strength_attack_away : oppTeam.strength_attack_home;
+      const oppDef = fx.isHome ? oppTeam.strength_defence_away : oppTeam.strength_defence_home;
+      const avgAtk = fx.isHome ? avgAtkAway : avgAtkHome; // opponent's venue-relevant avg
+      const avgDef = fx.isHome ? avgDefHome : avgDefAway;
+
+      // attacking output multiplier: weaker opponent defence -> more chances
+      const atkMultiplier = clamp(oppDef>0 ? (avgDef / oppDef) : 1, 0.55, 1.75);
+      const homeBonus = fx.isHome ? 1.06 : 0.95;
+
+      const expGoalInvolve = xgi90 * atkMultiplier * homeBonus * pAppear;
+      const expGoals = xg90 * atkMultiplier * homeBonus * pAppear;
+      const expAssists = Math.max(0, expGoalInvolve - expGoals);
+
+      // clean sheet probability via Poisson approx of goals conceded
+      const expGoalsAgainst = clamp(LEAGUE_AVG_GOALS * (oppAtk>0? oppAtk/avgAtk :1) * (avgDef>0? avgDef/(defStrength||avgDef):1) * (fx.isHome?0.92:1.08), 0.15, 3.5);
+      const csProb = Math.exp(-expGoalsAgainst) * pAppear;
+
+      let pts = p60*2 + (pAppear-p60)*1; // appearance
+      pts += bonusPerGame * pAppear;
+
+      if (pos==='GK' || pos==='DEF'){
+        pts += csProb * 4;
+        pts += expGoals * 6 + expAssists * 3;
+        if (pos==='GK') pts += (savesPerGame/3) * pAppear;
+        pts -= expGoalsAgainst * 0.3 * pAppear; // -1 per 2 conceded, approximated continuously
+      } else if (pos==='MID'){
+        pts += csProb * 1;
+        pts += expGoals * 5 + expAssists * 3;
+      } else { // FWD
+        pts += expGoals * 4 + expAssists * 3;
+      }
+
+      pts = Math.max(0, pts) * (calibration[pos]||1);
+      perGW[fx.event] = (perGW[fx.event]||0) + pts;
+      totalXP += pts;
+    });
+
+    return {
+      id: el.id, name: el.web_name, fullName: el.first_name+' '+el.second_name,
+      team: team.short_name, teamId: el.team, pos, price: el.now_cost/10,
+      xp: round1(totalXP), xpPerGW: round1(myFixtures.length? totalXP/Math.max(1,horizon):0),
+      gw1xp: round1(perGW[fromEvent] || 0),
+      numFixtures: myFixtures.length, pAppear: round2(pAppear),
+      status: el.status, news: el.news, selectedBy: el.selected_by_percent,
+      form: el.form, valueScore: el.price>0 ? round1(totalXP/(el.now_cost/10)) : 0
+    };
+  });
+  players.forEach(p=> p.valueScore = p.price>0 ? round1(p.xp/p.price) : 0);
+  return players;
+}
+
+function estimateXGI90(el){
+  const mins = el.minutes || 0;
+  if (mins < 45) return 0;
+  const goals = el.goals_scored||0, assists=el.assists_scored||el.assists||0;
+  return ((goals+assists) / mins) * 90;
+}
+function avg(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+function round1(v){ return Math.round(v*10)/10; }
+function round2(v){ return Math.round(v*100)/100; }
+
+// ============================================================================
+// SQUAD OPTIMIZER (greedy build + local-search swaps)
+// ============================================================================
+const SQUAD_QUOTA = {GK:2, DEF:5, MID:5, FWD:3};
+
+function optimizeSquad(players, budget){
+  const byPos = {GK:[],DEF:[],MID:[],FWD:[]};
+  players.forEach(p=>{ if(p.status!=='u') byPos[p.pos].push(p); }); // exclude unavailable/left club
+  POS_ORDER.forEach(pos => byPos[pos].sort((a,b)=> b.xp - a.xp));
+
+  const MIN_FODDER = {GK:4.0, DEF:3.9, MID:3.9, FWD:4.0}; // cheap-bench floor per pos
+
+  let squad = [];
+  let spent = 0;
+  let teamCount = {};
+
+  function remainingReserve(posDone){
+    // minimum cash needed to fill remaining mandatory slots after this pick
+    let reserve = 0;
+    POS_ORDER.forEach(pos=>{
+      const filled = squad.filter(p=>p.pos===pos).length + (pos===posDone?1:0);
+      const remaining = SQUAD_QUOTA[pos] - filled;
+      if (remaining>0) reserve += remaining * MIN_FODDER[pos];
+    });
+    return reserve;
+  }
+
+  // greedy fill by best xp-per-slot across positions, respecting budget headroom
+  let guard = 0;
+  while (squad.length < 15 && guard < 2000){
+    guard++;
+    let bestPick=null, bestPos=null, bestScore=-Infinity;
+    POS_ORDER.forEach(pos=>{
+      const filled = squad.filter(p=>p.pos===pos).length;
+      if (filled >= SQUAD_QUOTA[pos]) return;
+      for (const cand of byPos[pos]){
+        if (squad.find(p=>p.id===cand.id)) continue;
+        if ((teamCount[cand.teamId]||0) >= 3) continue;
+        const newSpent = spent + cand.price;
+        if (newSpent + remainingReserveIf(pos) > budget) continue;
+        if (cand.xp > bestScore){ bestScore = cand.xp; bestPick = cand; bestPos = pos; }
+        break; // list sorted desc, first feasible is best for this pos this round
+      }
+    });
+    if (!bestPick) break;
+    squad.push(bestPick);
+    spent += bestPick.price;
+    teamCount[bestPick.teamId] = (teamCount[bestPick.teamId]||0) + 1;
+  }
+
+  function remainingReserveIf(posJustFilled){
+    let reserve = 0;
+    POS_ORDER.forEach(pos=>{
+      const filled = squad.filter(p=>p.pos===pos).length + (pos===posJustFilled?1:0);
+      const remaining = SQUAD_QUOTA[pos] - filled;
+      if (remaining>0) reserve += remaining*MIN_FODDER[pos];
+    });
+    return reserve;
+  }
+
+  // local search: try swapping each squad member for a better affordable same-position player
+  let improved = true, iter=0;
+  while (improved && iter<300){
+    improved = false; iter++;
+    for (let i=0;i<squad.length;i++){
+      const cur = squad[i];
+      const candidates = byPos[cur.pos];
+      for (const cand of candidates){
+        if (squad.find(p=>p.id===cand.id)) continue;
+        if (cand.xp <= cur.xp) break; // sorted desc; no further candidate can beat cur
+        const otherTeamCount = (teamCount[cand.teamId]||0) - (cand.teamId===cur.teamId?1:0);
+        if (otherTeamCount >= 3) continue;
+        const newSpent = spent - cur.price + cand.price;
+        if (newSpent > budget) continue;
+        // apply swap
+        squad[i] = cand;
+        spent = newSpent;
+        teamCount[cur.teamId]--; teamCount[cand.teamId] = (teamCount[cand.teamId]||0)+1;
+        improved = true;
+        break;
+      }
+    }
+  }
+
+  return {squad, spent};
+}
+
+// pick best starting XI + captain from a 15-man squad
+const FORMATIONS = [
+  [3,4,3],[3,5,2],[4,4,2],[4,3,3],[4,5,1],[5,4,1],[5,3,2],[5,2,3]
+];
+function pickBestXI(squad){
+  const gks = squad.filter(p=>p.pos==='GK').sort((a,b)=>b.xp-a.xp);
+  const defs = squad.filter(p=>p.pos==='DEF').sort((a,b)=>b.xp-a.xp);
+  const mids = squad.filter(p=>p.pos==='MID').sort((a,b)=>b.xp-a.xp);
+  const fwds = squad.filter(p=>p.pos==='FWD').sort((a,b)=>b.xp-a.xp);
+  const gk = gks[0];
+
+  let best=null, bestTotal=-Infinity, bestFormation=null;
+  FORMATIONS.forEach(([d,m,f])=>{
+    if (d>defs.length || m>mids.length || f>fwds.length) return;
+    const chosen = [gk, ...defs.slice(0,d), ...mids.slice(0,m), ...fwds.slice(0,f)];
+    const total = chosen.reduce((s,p)=>s+p.xp,0);
+    if (total > bestTotal){ bestTotal = total; best = chosen; bestFormation = `${d}-${m}-${f}`; }
+  });
+  const bench = squad.filter(p=> !best.find(b=>b.id===p.id));
+  bench.sort((a,b)=> b.xp - a.xp);
+  const captain = best.reduce((c,p)=> p.xp>c.xp?p:c, best[0]);
+  return {starting: best, bench, formation: bestFormation, captain, totalXP: round1(bestTotal + captain.xp)};
+}
+
+// ============================================================================
+// MINI-LEAGUE STRATEGY
+// ============================================================================
+const MAX_RIVALS_FETCHED = 15;
+
+async function loadLeagueData(leagueId, userTeamIdRaw){
+  const standingsData = await fetchJSON(FPL_BASE + '/leagues-classic/' + leagueId + '/standings/?page_standings=1');
+  const results = standingsData.standings.results || [];
+  const userEntry = userTeamIdRaw ? results.find(r=> String(r.entry)===String(userTeamIdRaw)) : null;
+
+  const rivals = results.slice(0, MAX_RIVALS_FETCHED);
+  const ownership = {}; // playerId -> count
+  const captaincy = {}; // playerId -> count
+  let fetchedCount = 0;
+
+  for (const rival of rivals){
+    try{
+      const picks = await fetchJSON(FPL_BASE + '/entry/' + rival.entry + '/event/' + STATE.currentEvent + '/picks/');
+      fetchedCount++;
+      picks.picks.forEach(pk=>{
+        ownership[pk.element] = (ownership[pk.element]||0) + 1;
+        if (pk.is_captain) captaincy[pk.element] = (captaincy[pk.element]||0) + 1;
+      });
+    }catch(e){ /* skip a rival if their picks fail to load */ }
+  }
+
+  STATE.league = {
+    name: standingsData.league.name,
+    results, userEntry, rivals, ownership, captaincy, fetchedCount
+  };
+}
+
+function renderLeague(){
+  const L = STATE.league;
+  if (!L || !L.fetchedCount){
+    document.getElementById('tab-league').innerHTML = '<div class="empty">Could not fetch rival squads for this league (they may not have set a team yet this GW).</div>';
+    return;
+  }
+  let html = `<div class="sec-title">${L.name}</div>`;
+
+  if (L.userEntry){
+    const idx = L.results.findIndex(r=>r.entry===L.userEntry.entry);
+    const leader = L.results[0];
+    const chaser = idx < L.results.length-1 ? L.results[idx+1] : null;
+    html += `<div class="summary-strip"><span>Your rank: <b>#${L.userEntry.rank}</b></span>`;
+    if (L.userEntry.rank>1) html += `<span>Behind leader: <b>${leader.total - L.userEntry.total} pts</b></span>`;
+    if (chaser) html += `<span>Ahead of next: <b>${L.userEntry.total - chaser.total} pts</b></span>`;
+    html += `</div>`;
+  }
+  html += `<div class="hint">Scouted ${L.fetchedCount} rival squad${L.fetchedCount>1?'s':''} (top of table) for GW${STATE.currentEvent}.</div>`;
+
+  // most captained among rivals
+  const capEntries = Object.entries(L.captaincy).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  if (capEntries.length){
+    html += `<div class="sec-title">Rival Captain Picks (GW${STATE.currentEvent})</div><ul class="plist">`;
+    capEntries.forEach(([pid,count])=>{
+      const p = STATE.players.find(pl=>pl.id==pid);
+      if (!p) return;
+      const pct = Math.round(count/L.fetchedCount*100);
+      html += `<li class="prow"><span class="pinfo"><div class="pname">${p.name}</div><div class="pmeta"><span class="pos-tag">${p.pos}</span>${p.team}</div></span><span class="pxp">${pct}%</span></li>`;
+    });
+    html += `</ul><div class="hint">If you're chasing, captaining someone your rivals aren't is how you make up ground fast. If you're protecting a lead, matching the field's captain reduces risk.</div>`;
+  }
+
+  // in-league template (highest effective ownership)
+  const ownEntries = Object.entries(L.ownership).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  html += `<div class="sec-title">Your League's Template</div><ul class="plist">`;
+  ownEntries.forEach(([pid,count])=>{
+    const p = STATE.players.find(pl=>pl.id==pid);
+    if (!p) return;
+    const pct = Math.round(count/L.fetchedCount*100);
+    html += `<li class="prow"><span class="pinfo"><div class="pname">${p.name}</div><div class="pmeta"><span class="pos-tag">${p.pos}</span>${p.team}</div></span><span class="pxp">${pct}%</span></li>`;
+  });
+  html += `</ul>`;
+
+  // differentials: high xP, low ownership in this league
+  const ownedIds = new Set(Object.keys(L.ownership).map(Number));
+  const diffs = STATE.players
+    .filter(p=> p.status==='a' && p.xp>0 && (L.ownership[p.id]||0)/L.fetchedCount < 0.2 && p.price<=9.5)
+    .sort((a,b)=> b.xp - a.xp).slice(0,6);
+  html += `<div class="sec-title">Differentials To Close The Gap</div><ul class="plist">`;
+  diffs.forEach((p,i)=>{
+    const pct = Math.round(((L.ownership[p.id]||0)/L.fetchedCount)*100);
+    html += `<li class="prow"><span class="pnum">${i+1}</span><span class="pinfo"><div class="pname">${p.name}</div><div class="pmeta"><span class="pos-tag">${p.pos}</span>${p.team} &middot; ${pct}% owned in league</div></span><span class="pxp">${p.xp}</span></li>`;
+  });
+  html += `</ul><div class="hint">Low ownership in your league + strong projected points = the biggest rank-swing potential if you're behind. Higher risk than template picks — use if you need to make up ground, not if you're protecting a lead.</div>`;
+
+  document.getElementById('tab-league').innerHTML = html;
+}
+
+// ============================================================================
+// RENDERING
+// ============================================================================
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.tabpanel').forEach(p=>p.classList.toggle('active', p.id==='tab-'+name));
+}
+
+function posSlotsForFormation(formation){
+  const [d,m,f] = formation.split('-').map(Number);
+  return {GK:1,DEF:d,MID:m,FWD:f};
+}
+
+function renderPitchSVG(xi){
+  const rows = {GK:[], DEF:[], MID:[], FWD:[]};
+  xi.starting.forEach(p=> rows[p.pos].push(p));
+  const order = ['FWD','MID','DEF','GK']; // top to bottom on pitch (attack at top)
+  const yFor = {FWD:60, MID:130, DEF:200, GK:265};
+  let svg = `<svg viewBox="0 0 320 300" style="width:100%;height:auto;display:block;">`;
+  // pitch markings
+  svg += `<rect x="4" y="4" width="312" height="292" fill="none" stroke="#2a5940" stroke-width="1.5" rx="6"/>`;
+  svg += `<line x1="4" y1="150" x2="316" y2="150" stroke="#2a5940" stroke-width="1"/>`;
+  svg += `<circle cx="160" cy="150" r="28" fill="none" stroke="#2a5940" stroke-width="1"/>`;
+  order.forEach(pos=>{
+    const arr = rows[pos];
+    if (!arr.length) return;
+    const n = arr.length;
+    const spacing = 300/(n+1);
+    arr.forEach((p,i)=>{
+      const x = 10 + spacing*(i+1);
+      const y = yFor[pos];
+      const isCap = xi.captain.id===p.id;
+      svg += `<g>
+        <circle cx="${x}" cy="${y}" r="16" fill="${isCap?'#c9a24b':'#123a26'}" stroke="${isCap?'#e0bc6a':'#f4f1e6'}" stroke-width="1.5"/>
+        <text x="${x}" y="${y+4}" font-family="Space Mono, monospace" font-size="9" fill="${isCap?'#071510':'#f4f1e6'}" text-anchor="middle" font-weight="700">${isCap?'C':p.pos}</text>
+        <text x="${x}" y="${y+30}" font-family="Oswald, sans-serif" font-size="10" fill="#f4f1e6" text-anchor="middle">${truncate(p.name,10)}</text>
+        <text x="${x}" y="${y+42}" font-family="Space Mono, monospace" font-size="9" fill="#c9a24b" text-anchor="middle">${p.xp}</text>
+      </g>`;
+    });
+  });
+  svg += `</svg>`;
+  return svg;
+}
+function truncate(s,n){ return s.length>n? s.slice(0,n-1)+'…' : s; }
+
+function renderDreamXI(){
+  const xi = STATE.dreamXI;
+  const totalCost = STATE.dreamSquad.reduce((s,p)=>s+p.price,0);
+  let html = '';
+  html += `<div class="pitch-wrap"><div class="formation-label">Formation ${xi.formation} &middot; Captain: ${xi.captain.name}</div>${renderPitchSVG(xi)}</div>`;
+  html += `<div class="summary-strip"><span>Squad cost: <b>£${round1(totalCost)}m</b></span><span>Projected XI pts: <b>${xi.totalXP}</b></span></div>`;
+
+  html += `<div class="sec-title">Starting XI</div><ul class="plist">`;
+  xi.starting.slice().sort((a,b)=> POS_ORDER.indexOf(a.pos)-POS_ORDER.indexOf(b.pos) || b.xp-a.xp).forEach((p,i)=>{
+    html += playerRow(p, i+1, xi.captain.id===p.id);
+  });
+  html += `</ul>`;
+
+  html += `<div class="sec-title">Bench</div><ul class="plist">`;
+  xi.bench.forEach((p,i)=> html += playerRow(p, i+1, false));
+  html += `</ul>`;
+
+  document.getElementById('tab-dream').innerHTML = html;
+}
+
+function playerRow(p, num, isCap){
+  const warn = p.status!=='a' ? ` <span style="color:#c0453a;font-size:10px;">(${p.status==='i'?'INJ':p.status==='d'?'DOUBT':p.status.toUpperCase()})</span>` : '';
+  return `<li class="prow">
+    <span class="pnum">${num}</span>
+    <span class="pinfo">
+      <div class="pname">${p.name}${isCap?'<span class="cap-badge">C</span>':''}</div>
+      <div class="pmeta"><span class="pos-tag">${p.pos}</span>${p.team}${warn}</div>
+    </span>
+    <span class="pprice">£${p.price}m</span>
+    <span class="pxp">${p.xp}</span>
+  </li>`;
+}
+
+function renderUserSquad(){
+  const picks = STATE.userInfo.picks.picks;
+  const entry = STATE.userInfo.entry;
+  const bank = (STATE.userInfo.picks.entry_history.bank||0)/10;
+  const teamValue = (STATE.userInfo.picks.entry_history.value||0)/10;
+
+  const squad = picks.map(pk=>{
+    const p = STATE.players.find(pl=>pl.id===pk.element);
+    return Object.assign({}, p, {isCaptain: pk.is_captain, isVice: pk.is_vice_captain, multiplier: pk.multiplier});
+  }).filter(Boolean);
+
+  const totalXP = squad.reduce((s,p)=> s + p.xp*(p.multiplier||1), 0);
+
+  let html = `<div class="sec-title">${entry.name || 'Your Team'}</div>`;
+  html += `<div class="summary-strip"><span>Bank: <b>£${bank.toFixed(1)}m</b></span><span>Team value: <b>£${teamValue.toFixed(1)}m</b></span><span>Proj. pts: <b>${round1(totalXP)}</b></span></div>`;
+
+  html += `<ul class="plist">`;
+  POS_ORDER.forEach(pos=>{
+    squad.filter(p=>p.pos===pos).sort((a,b)=>b.xp-a.xp).forEach((p,i)=>{
+      html += playerRow(p, i+1, p.isCaptain);
+    });
+  });
+  html += `</ul>`;
+
+  const flagged = squad.filter(p=> p.status!=='a' || p.pAppear<0.5);
+  if (flagged.length){
+    html += `<div class="sec-title">Watch List</div><ul class="plist">`;
+    flagged.forEach((p,i)=> html += playerRow(p, i+1, false));
+    html += `</ul><div class="hint" style="margin-top:8px;">Low playing-time probability or injury flag — consider these for transfer priority.</div>`;
+  }
+
+  document.getElementById('tab-squad').innerHTML = html;
+}
+
+function renderTransfers(){
+  const picks = STATE.userInfo.picks.picks;
+  const bank = (STATE.userInfo.picks.entry_history.bank||0)/10;
+  const squadIds = picks.map(pk=>pk.element);
+  const squad = picks.map(pk=> STATE.players.find(p=>p.id===pk.element)).filter(Boolean);
+
+  const suggestions = [];
+  squad.forEach(cur=>{
+    const sellPrice = cur.price; // approximation: FPL sell price can differ slightly for profit-capped players
+    const budgetForThis = sellPrice + bank;
+    const pool = STATE.players.filter(p=> p.pos===cur.pos && !squadIds.includes(p.id) && p.price<=budgetForThis && p.status==='a');
+    pool.sort((a,b)=> b.xp - a.xp);
+    const best = pool[0];
+    if (best && best.xp > cur.xp + 1.5){ // only surface meaningful gains
+      suggestions.push({ out: cur, in: best, gain: round1(best.xp - cur.xp) });
+    }
+  });
+  suggestions.sort((a,b)=> b.gain - a.gain);
+
+  let html = '';
+  if (!suggestions.length){
+    html = '<div class="empty">No transfer clearly beats your current squad by a meaningful margin over this horizon. Your squad looks well-optimized already.</div>';
+  } else {
+    html += `<div class="hint" style="margin-bottom:14px;">Ranked by projected point gain over your ${STATE.horizon}-GW horizon. A hit (extra transfer) costs 4pts — only take gains above that unless you have a free transfer.</div>`;
+    suggestions.slice(0,6).forEach(s=>{
+      const netFree = s.gain;
+      const netHit = round1(s.gain - 4);
+      html += `<div class="xferrow">
+        <div class="xfer-top">
+          <span class="xfer-out">${s.out.name} (£${s.out.price}m)</span>
+          <span class="xfer-gain ${netFree>0?'gain-pos':'gain-neg'}">+${netFree} pts</span>
+        </div>
+        <div class="xfer-in">&rarr; ${s.in.name} <span style="color:var(--chalk-dim);font-weight:400;font-size:12px;">(£${s.in.price}m, ${s.in.team})</span></div>
+        <div class="xfer-sub">If using a free transfer: +${netFree} pts &middot; if taking a hit: ${netHit>=0?'+':''}${netHit} pts net</div>
+      </div>`;
+    });
+  }
+  document.getElementById('tab-xfers').innerHTML = html;
+}
+
+// restore last-used team id for convenience
+(async function initSaved(){
+  if (window.storage){
+    try{
+      const r = await window.storage.get('fpl_team_id');
+      if (r && r.value) document.getElementById('teamId').value = r.value;
+      const r2 = await window.storage.get('fpl_league_id');
+      if (r2 && r2.value) document.getElementById('leagueId').value = r2.value;
+    }catch(e){}
+  }
+})();
+</script>
+</body>
+</html>
