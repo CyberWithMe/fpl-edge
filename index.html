@@ -111,6 +111,28 @@ button.primary:disabled{background:#5a5548;cursor:default;}
 
 .empty{text-align:center;color:var(--chalk-dim);font-size:13px;padding:30px 10px;line-height:1.6;}
 footer{text-align:center;font-size:11px;color:var(--chalk-dim);padding:20px;font-family:'Space Mono',monospace;}
+
+/* ---- Planner ---- */
+.gw-pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:14px;-webkit-overflow-scrolling:touch;}
+.gw-pill{flex-shrink:0;font-family:'Space Mono',monospace;font-size:11px;padding:8px 12px;border-radius:20px;
+  background:var(--panel);border:1px solid var(--turf-line);color:var(--chalk-dim);cursor:pointer;text-align:center;min-width:52px;}
+.gw-pill.active{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:700;}
+.gw-pill .pts{display:block;font-size:13px;font-weight:700;margin-top:2px;}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
+.chip-btn{flex:1;min-width:70px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+  padding:9px 6px;border-radius:8px;background:var(--ink);border:1px solid var(--turf-line);color:var(--chalk-dim);cursor:pointer;text-align:center;}
+.chip-btn.active{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:700;}
+.xfer-form{background:var(--ink);border:1px solid var(--turf-line);border-radius:10px;padding:14px;margin-bottom:14px;}
+.xfer-form select{margin-bottom:10px;}
+.xfer-form select:last-of-type{margin-bottom:12px;}
+.btn-secondary{width:100%;background:transparent;border:1px solid var(--gold);color:var(--gold-bright);border-radius:8px;
+  padding:10px;font-family:'Oswald',sans-serif;font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;}
+.planned-move{display:flex;justify-content:space-between;align-items:center;background:var(--ink);border:1px solid var(--turf-line);
+  border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;}
+.planned-move .rm{color:var(--red);font-family:'Space Mono',monospace;font-size:11px;cursor:pointer;flex-shrink:0;margin-left:10px;}
+.plan-total-strip{background:var(--panel);border:1px solid var(--gold);border-radius:10px;padding:12px 16px;margin-top:16px;
+  display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:12px;color:var(--chalk-dim);}
+.plan-total-strip b{color:var(--gold-bright);font-size:15px;}
 </style>
 </head>
 <body>
@@ -154,12 +176,14 @@ footer{text-align:center;font-size:11px;color:var(--chalk-dim);padding:20px;font
       <div class="tab" data-tab="squad" onclick="switchTab('squad')">Your Squad</div>
       <div class="tab" data-tab="xfers" onclick="switchTab('xfers')">Transfers</div>
       <div class="tab" data-tab="league" onclick="switchTab('league')">League</div>
+      <div class="tab" data-tab="planner" onclick="switchTab('planner')">Planner</div>
     </div>
 
     <div class="tabpanel active" id="tab-dream"></div>
     <div class="tabpanel" id="tab-squad"></div>
     <div class="tabpanel" id="tab-xfers"></div>
     <div class="tabpanel" id="tab-league"></div>
+    <div class="tabpanel" id="tab-planner"></div>
   </div>
 
   <footer>Data: official FPL API &middot; Model is a heuristic estimate, not a guarantee.</footer>
@@ -337,6 +361,10 @@ async function runAnalysis(){
 
     renderDreamXI();
 
+    setStatus('Setting up planner…');
+    await initPlanner();
+    renderPlanner();
+
     if (teamIdRaw && /^\d+$/.test(teamIdRaw)){
       setStatus('Fetching your squad…');
       try{
@@ -483,7 +511,7 @@ function computeXP(elements, teams, fixtures, fromEvent, horizon, calibration){
       id: el.id, name: el.web_name, fullName: el.first_name+' '+el.second_name,
       team: team.short_name, teamId: el.team, pos, price: el.now_cost/10,
       xp: round1(totalXP), xpPerGW: round1(myFixtures.length? totalXP/Math.max(1,horizon):0),
-      gw1xp: round1(perGW[fromEvent] || 0),
+      gw1xp: round1(perGW[fromEvent] || 0), perGW: perGW,
       numFixtures: myFixtures.length, pAppear: round2(pAppear),
       status: el.status, news: el.news, selectedBy: el.selected_by_percent,
       form: el.form, valueScore: el.price>0 ? round1(totalXP/(el.now_cost/10)) : 0
@@ -855,6 +883,221 @@ function renderTransfers(){
     });
   }
   document.getElementById('tab-xfers').innerHTML = html;
+}
+
+// ============================================================================
+// SQUAD PLANNER — multi-gameweek planning with transfers & chips
+// ============================================================================
+const PLAN_KEY = 'fpl_plan_v1';
+const CHIP_LABELS = {none:'None', wc:'Wildcard', fh:'Free Hit', bb:'Bench Boost', tc:'Triple Captain'};
+
+async function initPlanner(){
+  const weeks = Object.keys(STATE.players[0].perGW || {}).map(Number).sort((a,b)=>a-b);
+  STATE.planWeeks = weeks.length ? weeks : [STATE.currentEvent];
+
+  let saved = null;
+  if (window.storage){
+    try{ const r = await window.storage.get(PLAN_KEY); if (r && r.value) saved = JSON.parse(r.value); }catch(e){}
+  }
+  const baseIds = STATE.dreamSquad.map(p=>p.id);
+  if (saved && saved.baseSquad && saved.baseSquad.length===15){
+    STATE.plan = saved;
+  } else {
+    STATE.plan = { baseSquad: baseIds, moves: [], chips: {} };
+  }
+  STATE.planActiveGW = STATE.planWeeks[0];
+}
+
+function savePlan(){
+  if (!window.storage) return;
+  window.storage.set(PLAN_KEY, JSON.stringify(STATE.plan)).catch(()=>{});
+}
+
+// permanent squad (player id list) in effect AT a given gw, applying all moves up to & including that gw
+function squadIdsAtGW(gw){
+  let ids = STATE.plan.baseSquad.slice();
+  STATE.plan.moves.filter(m=>m.gw<=gw).sort((a,b)=>a.gw-b.gw).forEach(m=>{
+    const idx = ids.indexOf(m.outId);
+    if (idx>-1) ids[idx] = m.inId;
+  });
+  return ids;
+}
+
+function playerById(id){ return STATE.players.find(p=>p.id===id); }
+
+// best starting XI for a specific gameweek given a squad id list, honoring chip effects
+function xiForWeek(ids, gw, chip){
+  const squad = ids.map(playerById).filter(Boolean);
+  const wpts = p => round1((p.perGW && p.perGW[gw]) || 0);
+  squad.forEach(p=> p._wk = wpts(p));
+
+  const gks = squad.filter(p=>p.pos==='GK').sort((a,b)=>b._wk-a._wk);
+  const defs = squad.filter(p=>p.pos==='DEF').sort((a,b)=>b._wk-a._wk);
+  const mids = squad.filter(p=>p.pos==='MID').sort((a,b)=>b._wk-a._wk);
+  const fwds = squad.filter(p=>p.pos==='FWD').sort((a,b)=>b._wk-a._wk);
+  const gk = gks[0];
+
+  let best=null, bestTotal=-Infinity, bestFormation=null;
+  FORMATIONS.forEach(([d,m,f])=>{
+    if (d>defs.length || m>mids.length || f>fwds.length) return;
+    const chosen = [gk, ...defs.slice(0,d), ...mids.slice(0,m), ...fwds.slice(0,f)];
+    const total = chosen.reduce((s,p)=>s+p._wk,0);
+    if (total > bestTotal){ bestTotal = total; best = chosen; bestFormation = `${d}-${m}-${f}`; }
+  });
+  const bench = squad.filter(p=> !best.find(b=>b.id===p.id)).sort((a,b)=>b._wk-a._wk);
+  const captain = best.reduce((c,p)=> p._wk>c._wk?p:c, best[0]);
+  const capMultiplier = chip==='tc' ? 3 : 2;
+
+  let totalPts = best.reduce((s,p)=>s+p._wk,0) + captain._wk*(capMultiplier-1);
+  if (chip==='bb') totalPts += bench.reduce((s,p)=>s+p._wk,0);
+
+  return { starting: best, bench, formation: bestFormation, captain, totalPts: round1(totalPts), capMultiplier };
+}
+
+// walk every planned week in order, tracking free-transfer bank & hit costs
+function planSummary(){
+  let freeTransfers = 1;
+  const weeks = [];
+  STATE.planWeeks.forEach(gw=>{
+    const ids = squadIdsAtGW(gw);
+    const chip = STATE.plan.chips[gw] || 'none';
+    const xi = xiForWeek(ids, gw, chip);
+    const movesThisWeek = STATE.plan.moves.filter(m=>m.gw===gw).length;
+    let cost = 0;
+    if (chip==='wc' || chip==='fh'){
+      // unlimited free transfers this week, bank untouched
+    } else {
+      cost = Math.max(0, movesThisWeek - freeTransfers) * 4;
+      freeTransfers = clamp(freeTransfers - movesThisWeek + 1, 1, 5);
+    }
+    const squadCost = ids.map(playerById).filter(Boolean).reduce((s,p)=>s+p.price,0);
+    weeks.push({ gw, xi, chip, movesThisWeek, cost, netPts: round1(xi.totalPts - cost), squadCost });
+  });
+  return weeks;
+}
+
+function addPlannedMove(outId, inId, gw){
+  STATE.plan.moves = STATE.plan.moves.filter(m=> !(m.gw===gw && m.outId===outId));
+  STATE.plan.moves.push({gw, outId, inId});
+  savePlan();
+  renderPlanner();
+}
+function removePlannedMove(gw, outId){
+  STATE.plan.moves = STATE.plan.moves.filter(m=> !(m.gw===gw && m.outId===outId));
+  savePlan();
+  renderPlanner();
+}
+function setChip(gw, chip){
+  const current = STATE.plan.chips[gw];
+  STATE.plan.chips[gw] = (current===chip) ? 'none' : chip;
+  savePlan();
+  renderPlanner();
+}
+function setPlannerActiveGW(gw){
+  STATE.planActiveGW = gw;
+  renderPlanner();
+}
+
+function renderPlanner(){
+  if (!STATE.plan) { document.getElementById('tab-planner').innerHTML = '<div class="empty">Run Analyze first.</div>'; return; }
+  const summary = planSummary();
+  const gw = STATE.planActiveGW;
+  const wk = summary.find(w=>w.gw===gw) || summary[0];
+  const ids = squadIdsAtGW(gw);
+
+  let html = `<div class="hint" style="margin-top:0;">Plan sits on top of your Dream XI squad by default. Add transfers and chips per gameweek — it's saved automatically on this device.</div>`;
+
+  html += `<div class="gw-pills">`;
+  summary.forEach(w=>{
+    html += `<div class="gw-pill ${w.gw===gw?'active':''}" onclick="setPlannerActiveGW(${w.gw})">GW${w.gw}<span class="pts">${w.netPts}</span></div>`;
+  });
+  html += `</div>`;
+
+  html += `<div class="chip-row">`;
+  ['wc','fh','bb','tc'].forEach(c=>{
+    const active = (STATE.plan.chips[gw]||'none')===c;
+    html += `<div class="chip-btn ${active?'active':''}" onclick="setChip(${gw},'${c}')">${CHIP_LABELS[c]}</div>`;
+  });
+  html += `</div>`;
+
+  // transfer form
+  const squadPlayers = ids.map(playerById).filter(Boolean);
+  html += `<div class="xfer-form">
+    <label style="margin-bottom:8px;">Plan a transfer for GW${gw}</label>
+    <select id="plannerOut">`;
+  POS_ORDER.forEach(pos=>{
+    squadPlayers.filter(p=>p.pos===pos).forEach(p=>{
+      html += `<option value="${p.id}">${pos} — ${p.name} (£${p.price}m)</option>`;
+    });
+  });
+  html += `</select>
+    <select id="plannerIn"></select>
+    <button class="btn-secondary" onclick="submitPlannerMove(${gw})">Add Transfer</button>
+  </div>`;
+
+  const movesThisWeek = STATE.plan.moves.filter(m=>m.gw===gw);
+  if (movesThisWeek.length){
+    html += `<div class="sec-title">Transfers this week</div>`;
+    movesThisWeek.forEach(m=>{
+      const out = playerById(m.outId), inp = playerById(m.inId);
+      if (!out || !inp) return;
+      html += `<div class="planned-move"><span>${out.name} &rarr; ${inp.name}</span><span class="rm" onclick="removePlannedMove(${gw},${m.outId})">remove</span></div>`;
+    });
+  }
+
+  html += `<div class="pitch-wrap"><div class="formation-label">Formation ${wk.xi.formation} &middot; Captain: ${wk.xi.captain.name}${wk.chip==='tc'?' (×3)':''}${wk.chip==='bb'?' &middot; Bench Boost active':''}</div>${renderPitchSVG(wk.xi)}</div>`;
+
+  html += `<div class="summary-strip"><span>Squad cost: <b>£${round1(wk.squadCost)}m</b></span><span>Transfer cost: <b>${wk.cost?'-'+wk.cost:'0'}</b></span><span>Net pts: <b>${wk.netPts}</b></span></div>`;
+
+  html += `<div class="sec-title">Starting XI</div><ul class="plist">`;
+  wk.xi.starting.slice().sort((a,b)=> POS_ORDER.indexOf(a.pos)-POS_ORDER.indexOf(b.pos) || b._wk-a._wk).forEach((p,i)=>{
+    html += weekPlayerRow(p, i+1, wk.xi.captain.id===p.id);
+  });
+  html += `</ul><div class="sec-title">Bench</div><ul class="plist">`;
+  wk.xi.bench.forEach((p,i)=> html += weekPlayerRow(p, i+1, false));
+  html += `</ul>`;
+
+  const totalNet = summary.reduce((s,w)=>s+w.netPts,0);
+  html += `<div class="plan-total-strip"><span>Plan total (GW${summary[0].gw}&ndash;GW${summary[summary.length-1].gw})</span><b>${round1(totalNet)} pts</b></div>`;
+
+  document.getElementById('tab-planner').innerHTML = html;
+  populatePlannerInSelect(gw);
+}
+
+function weekPlayerRow(p, num, isCap){
+  const warn = p.status!=='a' ? ` <span style="color:#c0453a;font-size:10px;">(${p.status==='i'?'INJ':p.status==='d'?'DOUBT':p.status.toUpperCase()})</span>` : '';
+  return `<li class="prow">
+    <span class="pnum">${num}</span>
+    <span class="pinfo">
+      <div class="pname">${p.name}${isCap?'<span class="cap-badge">C</span>':''}</div>
+      <div class="pmeta"><span class="pos-tag">${p.pos}</span>${p.team}${warn}</div>
+    </span>
+    <span class="pprice">£${p.price}m</span>
+    <span class="pxp">${p._wk}</span>
+  </li>`;
+}
+
+function populatePlannerInSelect(gw){
+  const outSel = document.getElementById('plannerOut');
+  const inSel = document.getElementById('plannerIn');
+  if (!outSel || !inSel) return;
+  function fillFor(outId){
+    const outPlayer = playerById(parseInt(outId));
+    if (!outPlayer) { inSel.innerHTML=''; return; }
+    const squadIds = new Set(squadIdsAtGW(gw));
+    const pool = STATE.players.filter(p=> p.pos===outPlayer.pos && !squadIds.has(p.id) && p.status==='a')
+      .sort((a,b)=> (b.perGW[gw]||0) - (a.perGW[gw]||0)).slice(0,40);
+    inSel.innerHTML = pool.map(p=> `<option value="${p.id}">${p.name} — £${p.price}m — ${round1(p.perGW[gw]||0)}pts</option>`).join('');
+  }
+  fillFor(outSel.value);
+  outSel.onchange = ()=> fillFor(outSel.value);
+}
+
+function submitPlannerMove(gw){
+  const outId = parseInt(document.getElementById('plannerOut').value);
+  const inId = parseInt(document.getElementById('plannerIn').value);
+  if (!outId || !inId) return;
+  addPlannedMove(outId, inId, gw);
 }
 
 // restore last-used team id for convenience
