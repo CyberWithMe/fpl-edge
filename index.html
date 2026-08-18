@@ -514,7 +514,14 @@ function computeXP(elements, teams, fixtures, fromEvent, horizon, calibration){
       gw1xp: round1(perGW[fromEvent] || 0), perGW: perGW,
       numFixtures: myFixtures.length, pAppear: round2(pAppear),
       status: el.status, news: el.news, selectedBy: el.selected_by_percent,
-      form: el.form, valueScore: el.price>0 ? round1(totalXP/(el.now_cost/10)) : 0
+      form: el.form, valueScore: el.price>0 ? round1(totalXP/(el.now_cost/10)) : 0,
+      // raw Opta-derived stats for transfer justification
+      xg90: parseFloat(el.expected_goals_per_90||0), xa90: parseFloat(el.expected_assists_per_90||0),
+      xgi90: xgi90, defCon90: parseFloat(el.defensive_contribution_per_90||0),
+      saves90: parseFloat(el.saves_per_90||0), xgc90: parseFloat(el.expected_goals_conceded_per_90||0),
+      cs90: parseFloat(el.clean_sheets_per_90||0), ictIndex: parseFloat(el.ict_index||0),
+      threat: parseFloat(el.threat||0), creativity: parseFloat(el.creativity||0), influence: parseFloat(el.influence||0),
+      bonus: el.bonus||0, minutes: el.minutes||0
     };
   });
   players.forEach(p=> p.valueScore = p.price>0 ? round1(p.xp/p.price) : 0);
@@ -899,13 +906,34 @@ async function initPlanner(){
   if (window.storage){
     try{ const r = await window.storage.get(PLAN_KEY); if (r && r.value) saved = JSON.parse(r.value); }catch(e){}
   }
-  const baseIds = STATE.dreamSquad.map(p=>p.id);
   if (saved && saved.baseSquad && saved.baseSquad.length===15){
     STATE.plan = saved;
+    if (!STATE.plan.baseSource) STATE.plan.baseSource = 'dream';
   } else {
-    STATE.plan = { baseSquad: baseIds, moves: [], chips: {} };
+    const defaultSource = STATE.userInfo ? 'myteam' : 'dream';
+    STATE.plan = { baseSquad: getSquadIdsForSource(defaultSource) || STATE.dreamSquad.map(p=>p.id), moves: [], chips: {}, baseSource: defaultSource };
   }
   STATE.planActiveGW = STATE.planWeeks[0];
+}
+
+function getSquadIdsForSource(source){
+  if (source==='myteam'){
+    if (!STATE.userInfo) return null;
+    return STATE.userInfo.picks.picks.map(pk=>pk.element);
+  }
+  return STATE.dreamSquad.map(p=>p.id);
+}
+
+function setPlannerBase(source){
+  const ids = getSquadIdsForSource(source);
+  if (!ids){
+    alert('Load your squad first — enter your FPL Team ID above and hit Analyze, then switch the planner baseline to My Squad.');
+    return;
+  }
+  STATE.plan = { baseSquad: ids, moves: [], chips: {}, baseSource: source };
+  STATE.planActiveGW = STATE.planWeeks[0];
+  savePlan();
+  renderPlanner();
 }
 
 function savePlan(){
@@ -1005,7 +1033,13 @@ function renderPlanner(){
   const wk = summary.find(w=>w.gw===gw) || summary[0];
   const ids = squadIdsAtGW(gw);
 
-  let html = `<div class="hint" style="margin-top:0;">Plan sits on top of your Dream XI squad by default. Add transfers and chips per gameweek — it's saved automatically on this device.</div>`;
+  let html = `<div class="hint" style="margin-top:0;">Plan sits on top of a baseline squad. Add transfers and chips per gameweek — it's saved automatically on this device.</div>`;
+
+  const src = STATE.plan.baseSource || 'dream';
+  html += `<div class="chip-row" style="margin-bottom:16px;">
+    <div class="chip-btn ${src==='myteam'?'active':''}" onclick="if(confirm('Reset the plan to start from your real squad? This clears any transfers/chips you\\'ve planned.')) setPlannerBase('myteam')">Baseline: My Squad</div>
+    <div class="chip-btn ${src==='dream'?'active':''}" onclick="if(confirm('Reset the plan to start from the Dream XI squad? This clears any transfers/chips you\\'ve planned.')) setPlannerBase('dream')">Baseline: Dream XI</div>
+  </div>`;
 
   html += `<div class="gw-pills">`;
   summary.forEach(w=>{
@@ -1022,8 +1056,10 @@ function renderPlanner(){
 
   // transfer form
   const squadPlayers = ids.map(playerById).filter(Boolean);
+  html += `<button class="btn-secondary" style="margin-bottom:14px;" onclick="toggleSuggestions(${gw})">Suggest Best Transfer</button>
+  <div id="plannerSuggestions" style="display:none;margin-bottom:14px;"></div>`;
   html += `<div class="xfer-form">
-    <label style="margin-bottom:8px;">Plan a transfer for GW${gw}</label>
+    <label style="margin-bottom:8px;">Or plan your own transfer for GW${gw}</label>
     <select id="plannerOut">`;
   POS_ORDER.forEach(pos=>{
     squadPlayers.filter(p=>p.pos===pos).forEach(p=>{
@@ -1062,6 +1098,78 @@ function renderPlanner(){
 
   document.getElementById('tab-planner').innerHTML = html;
   populatePlannerInSelect(gw);
+}
+
+function statsBlurb(p){
+  // position-relevant Opta-derived stats, the ones that actually justify the pick
+  if (p.pos==='GK'){
+    return `Saves/90: ${p.saves90.toFixed(2)} · xGC/90: ${p.xgc90.toFixed(2)} · Clean sheets/90: ${p.cs90.toFixed(2)} · Form: ${p.form}`;
+  }
+  if (p.pos==='DEF'){
+    return `xG90: ${p.xg90.toFixed(2)} · xA90: ${p.xa90.toFixed(2)} · Def. Contribution/90: ${p.defCon90.toFixed(1)} · xGC/90: ${p.xgc90.toFixed(2)} · Form: ${p.form}`;
+  }
+  if (p.pos==='MID'){
+    return `xG90: ${p.xg90.toFixed(2)} · xA90: ${p.xa90.toFixed(2)} · Def. Contribution/90: ${p.defCon90.toFixed(1)} · ICT: ${p.ictIndex.toFixed(1)} · Form: ${p.form}`;
+  }
+  return `xG90: ${p.xg90.toFixed(2)} · xA90: ${p.xa90.toFixed(2)} · Threat: ${p.threat.toFixed(0)} · ICT: ${p.ictIndex.toFixed(1)} · Form: ${p.form}`;
+}
+
+// remaining projected points for a player from gw onward through the plan's last week
+function remainingPts(p, fromGW){
+  return STATE.planWeeks.filter(g=>g>=fromGW).reduce((s,g)=> s + ((p.perGW && p.perGW[g])||0), 0);
+}
+
+function bestTransferSuggestions(gw){
+  const ids = squadIdsAtGW(gw);
+  const squad = ids.map(playerById).filter(Boolean);
+  const squadCost = squad.reduce((s,p)=>s+p.price,0);
+  const headroom = Math.max(0, STATE.budget - squadCost);
+  const squadIdSet = new Set(ids);
+
+  const suggestions = [];
+  squad.forEach(out=>{
+    const budgetForThis = out.price + headroom;
+    const pool = STATE.players.filter(p=> p.pos===out.pos && !squadIdSet.has(p.id) && p.price<=budgetForThis && p.status==='a');
+    pool.sort((a,b)=> remainingPts(b,gw) - remainingPts(a,gw));
+    const best = pool[0];
+    if (!best) return;
+    const gain = round1(remainingPts(best,gw) - remainingPts(out,gw));
+    if (gain > 2){
+      suggestions.push({ out, in: best, gain });
+    }
+  });
+  suggestions.sort((a,b)=> b.gain - a.gain);
+  return suggestions.slice(0,3);
+}
+
+function renderSuggestions(gw){
+  const box = document.getElementById('plannerSuggestions');
+  if (!box) return;
+  const suggestions = bestTransferSuggestions(gw);
+  if (!suggestions.length){
+    box.innerHTML = '<div class="hint">No transfer clearly improves your squad from here through the rest of the plan — it already looks well-optimized.</div>';
+    return;
+  }
+  let html = '';
+  suggestions.forEach((s,i)=>{
+    html += `<div class="xferrow">
+      <div class="xfer-top">
+        <span class="xfer-out">${s.out.name} (£${s.out.price}m)</span>
+        <span class="xfer-gain ${s.gain>0?'gain-pos':'gain-neg'}">+${s.gain} pts</span>
+      </div>
+      <div class="xfer-in">&rarr; ${s.in.name} <span style="color:var(--chalk-dim);font-weight:400;font-size:12px;">(£${s.in.price}m, ${s.in.team})</span></div>
+      <div class="xfer-sub" style="margin-top:6px;"><b style="color:var(--chalk-dim);">In:</b> ${statsBlurb(s.in)}</div>
+      <div class="xfer-sub" style="margin-top:3px;"><b style="color:var(--chalk-dim);">Out:</b> ${statsBlurb(s.out)}</div>
+      <button class="btn-secondary" style="margin-top:10px;" onclick="addPlannedMove(${s.out.id},${s.in.id},${gw})">Apply this transfer</button>
+    </div>`;
+  });
+  box.innerHTML = html;
+}
+function toggleSuggestions(gw){
+  const box = document.getElementById('plannerSuggestions');
+  const isHidden = box.style.display==='none' || !box.style.display;
+  box.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) renderSuggestions(gw);
 }
 
 function weekPlayerRow(p, num, isCap){
