@@ -171,9 +171,9 @@ footer{text-align:center;font-size:11px;color:var(--chalk-dim);padding:20px;font
 // ============================================================================
 const FPL_BASE = 'https://fantasy.premierleague.com/api';
 const PROXIES = [
-  url => 'https://corsproxy.io/?url=' + encodeURIComponent(url), // free for github.io origins
-  url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
+  url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), // no origin restriction, just rate-limited
   url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+  url => 'https://corsproxy.io/?url=' + encodeURIComponent(url), // free tier may be localhost-only now
   url => url, // last-ditch direct attempt
 ];
 const POS_MAP = {1:'GK',2:'DEF',3:'MID',4:'FWD'};
