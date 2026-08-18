@@ -170,11 +170,13 @@ footer{text-align:center;font-size:11px;color:var(--chalk-dim);padding:20px;font
 // CONFIG
 // ============================================================================
 const FPL_BASE = 'https://fantasy.premierleague.com/api';
+const WORKER_PROXY = 'https://fpl-proxy.sameer-singhdhaliwal.workers.dev';
 const PROXIES = [
-  url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), // no origin restriction, just rate-limited
+  url => { const u = new URL(url); return WORKER_PROXY + u.pathname.replace(/^\/api/, '') + u.search; }, // personal Cloudflare Worker - no size/rate limits
+  url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
   url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
-  url => 'https://corsproxy.io/?url=' + encodeURIComponent(url), // free tier may be localhost-only now
-  url => url, // last-ditch direct attempt
+  url => 'https://corsproxy.io/?url=' + encodeURIComponent(url),
+  url => url,
 ];
 const POS_MAP = {1:'GK',2:'DEF',3:'MID',4:'FWD'};
 const POS_ORDER = ['GK','DEF','MID','FWD'];
